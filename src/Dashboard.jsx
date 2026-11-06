@@ -94,6 +94,9 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
     setFormError('')
   }
 
+  // phone number keypads have no minus key, so offer a sign toggle
+  const flipSign = () => setValue((v) => (v.trim().startsWith('-') ? v.trim().slice(1) : `-${v.trim()}`))
+
   const save = async (e) => {
     e.preventDefault()
     const n = Number(value.trim())
@@ -238,16 +241,27 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
             <label htmlFor="pnl" className="login__label">
               Profit / loss for the day
             </label>
-            <input
-              id="pnl"
-              type="text"
-              inputMode="decimal"
-              placeholder="e.g. 1250 or -300"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              className="login__input"
-              autoFocus
-            />
+            <div className="modal__field">
+              <button
+                type="button"
+                className="modal__sign"
+                onClick={flipSign}
+                aria-label="Switch between profit and loss"
+                title="Switch between profit and loss"
+              >
+                +/−
+              </button>
+              <input
+                id="pnl"
+                type="text"
+                inputMode="decimal"
+                placeholder="e.g. 1250 or -300"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                className="login__input"
+                autoFocus
+              />
+            </div>
             {formError && (
               <p className="login__error" role="alert">
                 {formError}

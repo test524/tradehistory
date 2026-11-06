@@ -92,6 +92,7 @@ body {
   font-family: 'Poppins', system-ui, sans-serif;
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .login__left {
@@ -195,8 +196,34 @@ body {
 }
 
 @media (max-width: 700px) {
+  .login {
+    flex-direction: column;
+  }
   .login__left {
+    flex: 0 0 auto;
+    padding: 36px 16px 32px;
+    border-radius: 0 0 28px 28px;
+  }
+  .login__brand {
+    flex-direction: row;
+    gap: 14px;
+  }
+  .login__logo {
+    width: 56px;
+    height: 56px;
+  }
+  .login__brand-name {
+    font-size: 22px;
+  }
+  .login__right {
+    align-items: flex-start;
+    padding-top: 36px;
+  }
+  .login__title--brand {
     display: none;
+  }
+  .theme-toggle {
+    top: max(12px, env(safe-area-inset-top));
   }
 }
 

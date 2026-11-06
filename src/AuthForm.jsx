@@ -39,7 +39,7 @@ export default function AuthForm({ onAuthed }) {
 
   return (
     <form className="login__form" onSubmit={submit} noValidate>
-      <h1 className="login__title">{isRegister ? 'Create account' : 'Trade History'}</h1>
+      <h1 className={`login__title ${isRegister ? '' : 'login__title--brand'}`}>{isRegister ? 'Create account' : 'Trade History'}</h1>
       {isRegister && (
         <>
           <label htmlFor="name" className="login__label">

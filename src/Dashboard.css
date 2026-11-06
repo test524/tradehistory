@@ -1,5 +1,6 @@
 .dash {
   min-height: 100vh;
+  min-height: 100dvh;
   font-family: 'Poppins', system-ui, sans-serif;
   background: radial-gradient(1200px 400px at 50% -100px, var(--page-glow) 0%, var(--page-mid) 60%, var(--page-end) 100%);
   color: var(--text);
@@ -9,8 +10,8 @@
 /* ---------- floating account button ---------- */
 .fab {
   position: fixed;
-  right: 24px;
-  bottom: 24px;
+  right: max(24px, env(safe-area-inset-right));
+  bottom: max(24px, env(safe-area-inset-bottom));
   z-index: 10;
   display: flex;
   flex-direction: column;
@@ -370,6 +371,7 @@
 /* ---------- modal ---------- */
 .modal {
   position: fixed;
+  overflow-y: auto;
   inset: 0;
   display: flex;
   align-items: center;
@@ -397,6 +399,28 @@
   margin: 0 0 4px;
   font-size: 17px;
   color: var(--title);
+}
+
+.modal__field {
+  display: flex;
+  gap: 8px;
+}
+
+.modal__field .login__input {
+  flex: 1;
+  min-width: 0;
+}
+
+.modal__sign {
+  flex: 0 0 auto;
+  padding: 0 14px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent-link);
+  background: var(--surface-2);
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  cursor: pointer;
 }
 
 .modal__actions {
@@ -450,8 +474,8 @@
 
 @media (max-width: 600px) {
   .fab {
-    right: 16px;
-    bottom: 16px;
+    right: max(16px, env(safe-area-inset-right));
+    bottom: max(16px, env(safe-area-inset-bottom));
   }
   .cal__title {
     min-width: 0;
