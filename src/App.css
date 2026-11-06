@@ -196,8 +196,35 @@ body {
 }
 
 @media (max-width: 700px) {
+  .login {
+    flex-direction: column;
+  }
+  /* form starts below the theme button, logo sits at the bottom */
+  .login__right {
+    order: 1;
+    flex: 1;
+    align-items: flex-start;
+    padding-top: calc(72px + env(safe-area-inset-top));
+  }
   .login__left {
-    display: none;
+    order: 2;
+    flex: 0 0 auto;
+    background: transparent;
+    padding: 20px 16px calc(24px + env(safe-area-inset-bottom));
+  }
+  .login__brand {
+    flex-direction: row;
+    gap: 10px;
+    color: var(--text-strong);
+  }
+  .login__logo {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px var(--shadow-strong);
+  }
+  .login__brand-name {
+    font-size: 16px;
   }
   .theme-toggle {
     top: max(12px, env(safe-area-inset-top));
