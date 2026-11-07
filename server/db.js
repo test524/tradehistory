@@ -23,6 +23,9 @@ export async function initDb() {
       name       TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS pin_hash TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_attempts INT NOT NULL DEFAULT 0;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
     CREATE TABLE IF NOT EXISTS pnl_entries (
       user_phone TEXT NOT NULL REFERENCES users(phone) ON DELETE CASCADE,
       date       DATE NOT NULL,

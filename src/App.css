@@ -359,3 +359,11 @@ body {
     animation-duration: 2s;
   }
 }
+
+.login__pin {
+  letter-spacing: 6px;
+}
+
+.login__pin::placeholder {
+  letter-spacing: normal;
+}

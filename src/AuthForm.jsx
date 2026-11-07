@@ -9,6 +9,8 @@ export default function AuthForm({ onAuthed }) {
   const [name, setName] = useState('')
   const [country, setCountry] = useState('IN')
   const [phone, setPhone] = useState('')
+  const [pin, setPin] = useState('')
+  const [pin2, setPin2] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -17,6 +19,8 @@ export default function AuthForm({ onAuthed }) {
   const switchMode = (m) => {
     setMode(m)
     setError('')
+    setPin('')
+    setPin2('')
   }
 
   const submit = async (e) => {
@@ -24,10 +28,12 @@ export default function AuthForm({ onAuthed }) {
     const full = toE164(country, phone)
     if (!full) return setError('Enter a valid phone number')
     if (isRegister && name.trim().length < 2) return setError('Enter your name')
+    if (!/^\d{4}$/.test(pin)) return setError('Enter your 4-digit PIN')
+    if (isRegister && pin !== pin2) return setError('The two PINs do not match')
     setError('')
     setBusy(true)
     try {
-      const { token, user } = isRegister ? await api.register(name.trim(), full) : await api.login(full)
+      const { token, user } = isRegister ? await api.register(name.trim(), full, pin) : await api.login(full, pin)
       api.setToken(token)
       onAuthed(user)
     } catch (err) {
@@ -68,6 +74,35 @@ export default function AuthForm({ onAuthed }) {
         invalid={!!error}
         describedBy={error ? 'form-error' : undefined}
       />
+      <label htmlFor="pin" className="login__label">
+        {isRegister ? 'Create a 4-digit PIN' : 'PIN'}
+      </label>
+      <input
+        id="pin"
+        type="password"
+        inputMode="numeric"
+        autoComplete={isRegister ? 'new-password' : 'current-password'}
+        maxLength={4}
+        placeholder="••••"
+        value={pin}
+        onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+        aria-invalid={!!error}
+        className="login__input login__pin"
+      />
+      {isRegister && (
+        <input
+          id="pin2"
+          type="password"
+          inputMode="numeric"
+          autoComplete="new-password"
+          maxLength={4}
+          placeholder="Confirm PIN"
+          aria-label="Confirm PIN"
+          value={pin2}
+          onChange={(e) => setPin2(e.target.value.replace(/\D/g, ''))}
+          className="login__input login__pin"
+        />
+      )}
       {error && (
         <p id="form-error" className="login__error" role="alert">
           {error}

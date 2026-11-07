@@ -4,12 +4,15 @@ import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { initDb, query } from './db.js'
+import { DUMMY_HASH, hashPin, pinProblem, verifyPin } from './pin.js'
 
 const DIST = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist')
 
 const PORT = process.env.PORT || 4000
 const PHONE_RE = /^\+[1-9]\d{7,14}$/
 const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const MAX_PIN_ATTEMPTS = 5
+const LOCK_MINUTES = 15
 
 const app = express()
 app.disable('x-powered-by')
@@ -85,16 +88,18 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }))
 
 app.post('/api/auth/register', async (req, res, next) => {
   try {
-    const { name, phone } = req.body ?? {}
+    const { name, phone, pin } = req.body ?? {}
     const cleanName = typeof name === 'string' ? name.trim() : ''
     if (cleanName.length < 2 || cleanName.length > 60) {
       return res.status(400).json({ error: 'name must be 2–60 characters' })
     }
     if (!validPhone(phone)) return res.status(400).json({ error: 'invalid phone number' })
+    const problem = pinProblem(pin)
+    if (problem) return res.status(400).json({ error: problem })
 
     const { rowCount } = await query(
-      `INSERT INTO users (phone, name) VALUES ($1, $2) ON CONFLICT (phone) DO NOTHING`,
-      [phone, cleanName],
+      `INSERT INTO users (phone, name, pin_hash) VALUES ($1, $2, $3) ON CONFLICT (phone) DO NOTHING`,
+      [phone, cleanName, await hashPin(pin)],
     )
     if (!rowCount) return res.status(409).json({ error: 'phone number already registered, please log in' })
 
@@ -105,14 +110,46 @@ app.post('/api/auth/register', async (req, res, next) => {
   }
 })
 
+const BAD_LOGIN = 'Incorrect phone number or PIN'
+
 app.post('/api/auth/login', async (req, res, next) => {
   try {
-    const { phone } = req.body ?? {}
-    if (!validPhone(phone)) return res.status(400).json({ error: 'invalid phone number' })
-    const user = await findUser(phone)
-    if (!user) {
-      return res.status(404).json({ error: 'phone number not registered, please register first' })
+    const { phone, pin } = req.body ?? {}
+    if (!validPhone(phone) || typeof pin !== 'string' || !/^\d{4}$/.test(pin)) {
+      return res.status(400).json({ error: 'enter your phone number and 4-digit PIN' })
     }
+    const { rows } = await query(
+      `SELECT name, phone, created_at AS "createdAt", pin_hash, failed_attempts,
+              GREATEST(0, CEIL(EXTRACT(EPOCH FROM (locked_until - now())) / 60))::int AS lock_minutes
+       FROM users WHERE phone = $1`,
+      [phone],
+    )
+    const row = rows[0]
+    if (!row) {
+      await verifyPin(pin, DUMMY_HASH) // same cost as a real check
+      return res.status(401).json({ error: BAD_LOGIN })
+    }
+    if (row.lock_minutes > 0) {
+      return res.status(429).json({ error: `Too many wrong PINs. Try again in ${row.lock_minutes} minute(s).` })
+    }
+    if (!row.pin_hash) {
+      return res.status(403).json({ error: 'This account has no PIN yet. Ask the app owner to set one.' })
+    }
+    if (!(await verifyPin(pin, row.pin_hash))) {
+      const { rows: upd } = await query(
+        `UPDATE users SET failed_attempts = failed_attempts + 1,
+                locked_until = CASE WHEN failed_attempts + 1 >= $2 THEN now() + make_interval(mins => $3) END
+         WHERE phone = $1 RETURNING failed_attempts`,
+        [phone, MAX_PIN_ATTEMPTS, LOCK_MINUTES],
+      )
+      if (upd[0]?.failed_attempts >= MAX_PIN_ATTEMPTS) {
+        await query(`UPDATE users SET failed_attempts = 0 WHERE phone = $1`, [phone])
+        return res.status(429).json({ error: `Too many wrong PINs. Locked for ${LOCK_MINUTES} minutes.` })
+      }
+      return res.status(401).json({ error: BAD_LOGIN })
+    }
+    await query(`UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE phone = $1`, [phone])
+    const user = { name: row.name, phone: row.phone, createdAt: row.createdAt }
     res.json({ token: await issueToken(phone), user })
   } catch (err) {
     next(err)

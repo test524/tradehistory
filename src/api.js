@@ -31,8 +31,8 @@ async function request(path, body) {
   return data
 }
 
-export const register = (name, phone) => request('/auth/register', { name, phone })
-export const login = (phone) => request('/auth/login', { phone })
+export const register = (name, phone, pin) => request('/auth/register', { name, phone, pin })
+export const login = (phone, pin) => request('/auth/login', { phone, pin })
 export const me = () => request('/auth/me')
 export const listPnl = (from, to) => request(`/pnl?from=${from}&to=${to}`)
 export const savePnl = (date, pnl) => request('/pnl', { date, pnl })
