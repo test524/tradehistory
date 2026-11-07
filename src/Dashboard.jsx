@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as api from './api'
+import ImportModal from './ImportModal'
 import './Dashboard.css'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -24,6 +25,9 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [toast, setToast] = useState('')
+  const [reloadTick, setReloadTick] = useState(0)
   const fabRef = useRef(null)
 
   // close the account menu on outside click or Escape
@@ -62,7 +66,7 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
     return () => {
       cancelled = true
     }
-  }, [year, month, daysInMonth, monthKey])
+  }, [year, month, daysInMonth, monthKey, reloadTick])
 
   // still waiting for the month on screen (first load or after changing month)
   const loading = data.key !== monthKey
@@ -215,6 +219,17 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
               <strong>{user.name}</strong>
               <span>{user.phone}</span>
             </div>
+            <button
+              type="button"
+              className="fab__item"
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false)
+                setImporting(true)
+              }}
+            >
+              <span>📥 Import from Zerodha</span>
+            </button>
             <button type="button" className="fab__item fab__item--theme" role="menuitemcheckbox" aria-checked={theme === 'dark'} onClick={onToggleTheme}>
               <span>{theme === 'dark' ? '☀️ Light mode' : '🌙 Dark mode'}</span>
               <span className={`switch ${theme === 'dark' ? 'is-on' : ''}`} aria-hidden="true" />
@@ -235,6 +250,25 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
           {menuOpen ? '✕' : user.name.trim().charAt(0).toUpperCase()}
         </button>
       </div>
+
+      {importing && (
+        <ImportModal
+          onClose={() => setImporting(false)}
+          onImported={({ saved, skipped }) => {
+            setImporting(false)
+            setData((d) => ({ ...d, key: '' })) // show the loader, then reload the month
+            setReloadTick((t) => t + 1)
+            setToast(`Imported ${saved} day${saved === 1 ? '' : 's'}${skipped ? `, ${skipped} kept as they were` : ''}`)
+            setTimeout(() => setToast(''), 4000)
+          }}
+        />
+      )}
+
+      {toast && (
+        <div className="toast" role="status">
+          {toast}
+        </div>
+      )}
 
       {selected && (
         <div className="modal" onClick={() => setSelected(null)}>

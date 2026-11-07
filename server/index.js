@@ -13,7 +13,7 @@ const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
 const app = express()
 app.disable('x-powered-by')
-app.use(express.json())
+app.use(express.json({ limit: '1mb' }))
 
 /* ---------- user lookup ---------- */
 
@@ -152,6 +152,47 @@ app.post('/api/pnl', requireAuth, async (req, res, next) => {
     const { inserted, ...record } = rows[0]
     const existed = !inserted
     res.status(existed ? 200 : 201).json(record)
+  } catch (err) {
+    next(err)
+  }
+})
+
+// Import many days at once (e.g. from a Zerodha Console report)
+const MAX_IMPORT = 5000
+app.post('/api/pnl/bulk', requireAuth, async (req, res, next) => {
+  try {
+    const { entries, overwrite = true } = req.body ?? {}
+    if (!Array.isArray(entries) || entries.length === 0) {
+      return res.status(400).json({ error: 'entries must be a non-empty array' })
+    }
+    if (entries.length > MAX_IMPORT) {
+      return res.status(400).json({ error: `too many entries (max ${MAX_IMPORT})` })
+    }
+    const byDate = new Map() // a repeated date keeps the last value
+    for (const e of entries) {
+      if (typeof e?.date !== 'string' || !isRealDate(e.date)) {
+        return res.status(400).json({ error: `invalid date: ${String(e?.date).slice(0, 20)}` })
+      }
+      if (typeof e.pnl !== 'number' || !Number.isFinite(e.pnl) || Math.abs(e.pnl) >= 1e12) {
+        return res.status(400).json({ error: `invalid pnl for ${e.date}` })
+      }
+      byDate.set(e.date, e.pnl)
+    }
+    const dates = [...byDate.keys()]
+    const days = dates.map((d) =>
+      new Date(`${d}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' }),
+    )
+    const { rowCount } = await query(
+      `INSERT INTO pnl_entries (user_phone, date, day, pnl)
+       SELECT $1, d, dy, p FROM unnest($2::date[], $3::text[], $4::numeric[]) AS t(d, dy, p)
+       ON CONFLICT (user_phone, date) ${
+         overwrite === false
+           ? 'DO NOTHING'
+           : 'DO UPDATE SET day = EXCLUDED.day, pnl = EXCLUDED.pnl, updated_at = now()'
+       }`,
+      [req.user.phone, dates, days, [...byDate.values()]],
+    )
+    res.json({ saved: rowCount, skipped: dates.length - rowCount })
   } catch (err) {
     next(err)
   }
