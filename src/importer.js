@@ -54,18 +54,30 @@ function pickColumn(headers, patterns, exclude) {
 
 const DATE_PATTERNS = [/exit date/, /sell date/, /trade date/, /^date$/, /date/]
 const PNL_PATTERNS = [
-  /^(net )?(realis?z?ed )?(p ?& ?l|pnl|profit( ?(&|and) ?loss)?)$/,
-  /realis?z?ed.*(p ?& ?l|pnl|profit)/,
+  /^(net )?(realis?z?ed )?(p ?[&/] ?l|pnl|profit( ?(&|and) ?loss)?)$/,
+  /realis?z?ed.*(p ?[&/] ?l|pnl|profit)/,
   /^profit/,
-  /p ?& ?l|pnl|profit/,
+  /p ?[&/] ?l|pnl|profit/,
 ]
+// when several profit columns exist (e.g. per strategy plus a combined one), this one wins
+const PNL_PREFER = /combined|total|overall|net/
 const PNL_EXCLUDE = /unrealis?z?ed|taxable|%|percent|turnover|charges|brokerage/
 
-function readSheet(data) {
+function readSheet(data, wantedPnlHeader) {
   for (let r = 0; r < Math.min(data.length, 100); r++) {
     const headers = (data[r] || []).map(norm)
     const dateCol = pickColumn(headers, DATE_PATTERNS)
-    const pnlCol = pickColumn(headers, PNL_PATTERNS, PNL_EXCLUDE)
+    // every column that looks like profit, so the caller can offer a choice
+    const candidates = headers
+      .map((h, i) => (h && PNL_PATTERNS.some((re) => re.test(h)) && !PNL_EXCLUDE.test(h) ? i : -1))
+      .filter((i) => i !== -1)
+    let pnlCol = pickColumn(headers, PNL_PATTERNS, PNL_EXCLUDE)
+    const preferred = candidates.find((i) => PNL_PREFER.test(headers[i]))
+    if (preferred !== undefined && !/^(net )?(realis?z?ed )?(p ?[&/] ?l|pnl|profit)$/.test(headers[pnlCol] ?? '')) pnlCol = preferred
+    if (wantedPnlHeader) {
+      const wanted = candidates.find((i) => String(data[r][i]).trim() === wantedPnlHeader)
+      if (wanted !== undefined) pnlCol = wanted
+    }
     if (dateCol === -1 || pnlCol === -1 || dateCol === pnlCol) continue
 
     const byDate = new Map()
@@ -85,6 +97,7 @@ function readSheet(data) {
         headerRow: r + 1,
         dateHeader: String(data[r][dateCol]).trim(),
         pnlHeader: String(data[r][pnlCol]).trim(),
+        pnlOptions: candidates.map((i) => String(data[r][i]).trim()),
         skipped,
         entries: [...byDate]
           .map(([date, pnl]) => ({ date, pnl: Math.round(pnl * 100) / 100 }))
@@ -177,10 +190,10 @@ function readTradeList(data) {
 }
 
 // sheets: [{ name, data: any[][] }]
-export function extractDailyPnl(sheets) {
+export function extractDailyPnl(sheets, { pnlHeader } = {}) {
   let best = null
   for (const sheet of sheets) {
-    const found = readSheet(sheet.data)
+    const found = readSheet(sheet.data, pnlHeader)
     if (found && (!best || found.entries.length > best.entries.length)) best = { ...found, mode: 'pnl', sheet: sheet.name }
   }
   if (!best) {
@@ -236,12 +249,14 @@ export function parseCsv(text) {
 export async function readReportFile(file) {
   const name = file.name.toLowerCase()
   if (name.endsWith('.csv') || name.endsWith('.txt')) {
-    return extractDailyPnl([{ name: file.name, data: parseCsv(await file.text()) }])
+    const sheets = [{ name: file.name, data: parseCsv(await file.text()) }]
+    return { ...extractDailyPnl(sheets), sheets }
   }
   if (name.endsWith('.xlsx')) {
     const { default: readXlsx } = await import('read-excel-file/browser') // loaded only when needed
     const sheets = await readXlsx(file)
-    return extractDailyPnl(sheets.map((s) => ({ name: s.sheet, data: s.data })))
+    const all = sheets.map((s) => ({ name: s.sheet, data: s.data }))
+    return { ...extractDailyPnl(all), sheets: all }
   }
   throw new Error('Please choose a .xlsx or .csv file (download it from Zerodha Console → Reports).')
 }

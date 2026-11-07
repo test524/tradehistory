@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import * as api from './api'
-import { readReportFile } from './importer'
+import { extractDailyPnl, readReportFile } from './importer'
 
 const money = (n) => (n < 0 ? '-' : n > 0 ? '+' : '') + Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 2 })
 
@@ -26,6 +26,15 @@ export default function ImportModal({ onClose, onImported }) {
       setError(err.message || 'Could not read this file')
     } finally {
       setReading(false)
+    }
+  }
+
+  // files with several profit columns (e.g. per strategy + combined): let the user switch
+  function pickColumn(header) {
+    try {
+      setParsed((p) => ({ ...extractDailyPnl(p.sheets, { pnlHeader: header }), sheets: p.sheets }))
+    } catch (err) {
+      setError(err.message)
     }
   }
 
@@ -103,6 +112,19 @@ export default function ImportModal({ onClose, onImported }) {
               </div>
             )}
           </div>
+        )}
+
+        {parsed?.pnlOptions?.length > 1 && (
+          <label className="import__column">
+            Profit column
+            <select value={parsed.pnlHeader} onChange={(e) => pickColumn(e.target.value)} className="login__input">
+              {parsed.pnlOptions.map((h) => (
+                <option key={h} value={h}>
+                  {h}
+                </option>
+              ))}
+            </select>
+          </label>
         )}
 
         {parsed && (
