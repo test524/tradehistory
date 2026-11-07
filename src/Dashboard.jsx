@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import * as api from './api'
 import ImportModal from './ImportModal'
 import Report from './Report'
@@ -25,28 +25,20 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
   const [value, setValue] = useState('')
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [navOpen, setNavOpen] = useState(false) // side menu drawer (phones)
   const [importing, setImporting] = useState(false)
   const [tab, setTab] = useState('calendar') // 'calendar' | 'report'
   const [all, setAll] = useState({ rows: [], loading: false, error: '' })
   const [toast, setToast] = useState('')
   const [reloadTick, setReloadTick] = useState(0)
-  const fabRef = useRef(null)
 
-  // close the account menu on outside click or Escape
+  // close the side menu drawer with Escape
   useEffect(() => {
-    if (!menuOpen) return
-    const onDown = (e) => {
-      if (!fabRef.current?.contains(e.target)) setMenuOpen(false)
-    }
-    const onKey = (e) => e.key === 'Escape' && setMenuOpen(false)
-    document.addEventListener('mousedown', onDown)
+    if (!navOpen) return
+    const onKey = (e) => e.key === 'Escape' && setNavOpen(false)
     document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [menuOpen])
+    return () => document.removeEventListener('keydown', onKey)
+  }, [navOpen])
 
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const firstWeekday = new Date(year, month, 1).getDay()
@@ -168,25 +160,89 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
 
   return (
     <div className="dash">
-      <main className="dash__main">
-        <div className="tabs" role="tablist" aria-label="View">
+      <button
+        type="button"
+        className="side__burger"
+        onClick={() => setNavOpen(true)}
+        aria-label="Open menu"
+        aria-expanded={navOpen}
+      >
+        <span /> <span /> <span />
+      </button>
+      {navOpen && <div className="side__overlay" onClick={() => setNavOpen(false)} />}
+
+      <aside className={`side ${navOpen ? 'is-open' : ''}`} aria-label="Menu">
+        <div className="side__brand">
+          <svg viewBox="0 0 64 64" width="32" height="32" aria-hidden="true">
+            <rect width="64" height="64" rx="16" fill="#fff" />
+            <path d="M12 44 L26 30 L35 38 L52 20 M42 20 H52 V30" fill="none" stroke="#6d28d9" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span>Trade History</span>
+          <button type="button" className="side__close" onClick={() => setNavOpen(false)} aria-label="Close menu">
+            ✕
+          </button>
+        </div>
+
+        <nav className="side__nav">
           {[
-            ['calendar', 'Calendar'],
-            ['report', 'Report'],
-          ].map(([id, label]) => (
+            ['calendar', '📅', 'Calendar'],
+            ['report', '📊', 'Report'],
+          ].map(([id, icon, label]) => (
             <button
               key={id}
               type="button"
-              role="tab"
-              aria-selected={tab === id}
-              className={`tabs__btn ${tab === id ? 'is-active' : ''}`}
-              onClick={() => setTab(id)}
+              className={`side__item ${tab === id ? 'is-active' : ''}`}
+              aria-current={tab === id ? 'page' : undefined}
+              onClick={() => {
+                setTab(id)
+                setNavOpen(false)
+              }}
             >
-              {label}
+              <span className="side__icon" aria-hidden="true">{icon}</span> {label}
             </button>
           ))}
-        </div>
+        </nav>
 
+        <div className="side__bottom">
+          <button
+            type="button"
+            className="side__item"
+            onClick={() => {
+              setNavOpen(false)
+              setImporting(true)
+            }}
+          >
+            <span className="side__icon" aria-hidden="true">📥</span> Import
+          </button>
+          <button
+            type="button"
+            className="side__item side__item--between"
+            role="switch"
+            aria-checked={theme === 'dark'}
+            onClick={onToggleTheme}
+          >
+            <span>
+              <span className="side__icon" aria-hidden="true">{theme === 'dark' ? '☀️' : '🌙'}</span>{' '}
+              {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            </span>
+            <span className={`switch ${theme === 'dark' ? 'is-on' : ''}`} aria-hidden="true" />
+          </button>
+          <div className="side__user">
+            <span className="side__avatar" aria-hidden="true">
+              {user.name.trim().charAt(0).toUpperCase()}
+            </span>
+            <span className="side__who">
+              <strong>{user.name}</strong>
+              <span>{user.phone}</span>
+            </span>
+          </div>
+          <button type="button" className="side__item side__item--danger" onClick={onLogout}>
+            <span className="side__icon" aria-hidden="true">🚪</span> Log out
+          </button>
+        </div>
+      </aside>
+
+      <main className="dash__main">
         {tab === 'report' ? (
           all.loading ? (
             <div className="report__loading" role="status" aria-label="Loading">
@@ -262,64 +318,6 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
           </>
         )}
       </main>
-
-      <div className="fab" ref={fabRef}>
-        {menuOpen && (
-          <div className="fab__menu" role="menu">
-            <div className="fab__info">
-              <strong>{user.name}</strong>
-              <span>{user.phone}</span>
-            </div>
-            <button
-              type="button"
-              className="fab__item"
-              role="menuitem"
-              onClick={() => {
-                setMenuOpen(false)
-                setImporting(true)
-              }}
-            >
-              <span>📥 Import</span>
-            </button>
-            <button type="button" className="fab__item fab__item--theme" role="menuitemcheckbox" aria-checked={theme === 'dark'} onClick={onToggleTheme}>
-              <span>{theme === 'dark' ? '☀️ Light mode' : '🌙 Dark mode'}</span>
-              <span className={`switch ${theme === 'dark' ? 'is-on' : ''}`} aria-hidden="true" />
-            </button>
-            <button type="button" className="fab__item fab__item--danger" role="menuitem" onClick={onLogout}>
-              Log out
-            </button>
-          </div>
-        )}
-        <button
-          type="button"
-          className="fab__btn"
-          onClick={() => setMenuOpen((o) => !o)}
-          aria-label="Account menu"
-          aria-expanded={menuOpen}
-          aria-haspopup="menu"
-        >
-          {menuOpen ? '✕' : user.name.trim().charAt(0).toUpperCase()}
-        </button>
-      </div>
-
-      {importing && (
-        <ImportModal
-          onClose={() => setImporting(false)}
-          onImported={({ saved, skipped }) => {
-            setImporting(false)
-            setData((d) => ({ ...d, key: '' })) // show the loader, then reload the month
-            setReloadTick((t) => t + 1)
-            setToast(`Imported ${saved} day${saved === 1 ? '' : 's'}${skipped ? `, ${skipped} kept as they were` : ''}`)
-            setTimeout(() => setToast(''), 4000)
-          }}
-        />
-      )}
-
-      {toast && (
-        <div className="toast" role="status">
-          {toast}
-        </div>
-      )}
 
       {selected && (
         <div className="modal" onClick={() => setSelected(null)}>
