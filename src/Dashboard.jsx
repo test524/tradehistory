@@ -228,7 +228,7 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
                 setImporting(true)
               }}
             >
-              <span>📥 Import from Zerodha</span>
+              <span>📥 Import</span>
             </button>
             <button type="button" className="fab__item fab__item--theme" role="menuitemcheckbox" aria-checked={theme === 'dark'} onClick={onToggleTheme}>
               <span>{theme === 'dark' ? '☀️ Light mode' : '🌙 Dark mode'}</span>

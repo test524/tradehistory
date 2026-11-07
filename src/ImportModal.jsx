@@ -53,7 +53,7 @@ export default function ImportModal({ onClose, onImported }) {
   return (
     <div className="modal" onClick={onClose}>
       <div className="modal__box modal__box--wide" onClick={(e) => e.stopPropagation()}>
-        <h3 className="modal__title">Import P&amp;L from Zerodha</h3>
+        <h3 className="modal__title">Import</h3>
         <p className="import__help">
           Choose a Zerodha <strong>P&amp;L report</strong> or a <strong>trade list / tradebook</strong> (.csv or .xlsx).
           Profit is added up per day. For trade lists, buys and sells are matched to work out the profit.
