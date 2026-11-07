@@ -319,6 +319,25 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
         )}
       </main>
 
+      {importing && (
+        <ImportModal
+          onClose={() => setImporting(false)}
+          onImported={({ saved, skipped }) => {
+            setImporting(false)
+            setData((d) => ({ ...d, key: '' })) // show the loader, then reload the month
+            setReloadTick((t) => t + 1)
+            setToast(`Imported ${saved} day${saved === 1 ? '' : 's'}${skipped ? `, ${skipped} kept as they were` : ''}`)
+            setTimeout(() => setToast(''), 4000)
+          }}
+        />
+      )}
+
+      {toast && (
+        <div className="toast" role="status">
+          {toast}
+        </div>
+      )}
+
       {selected && (
         <div className="modal" onClick={() => setSelected(null)}>
           <form className="modal__box" onClick={(e) => e.stopPropagation()} onSubmit={save} noValidate>
