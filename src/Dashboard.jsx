@@ -17,8 +17,8 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
   const today = new Date()
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
-  const [entries, setEntries] = useState({}) // { 'YYYY-MM-DD': pnl }
-  const [loadError, setLoadError] = useState('')
+  // data for one month; `key` says which month it belongs to
+  const [data, setData] = useState({ key: '', entries: {}, error: '' })
   const [selected, setSelected] = useState(null) // 'YYYY-MM-DD'
   const [value, setValue] = useState('')
   const [formError, setFormError] = useState('')
@@ -46,24 +46,28 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
   const todayIso = iso(today.getFullYear(), today.getMonth(), today.getDate())
 
   // load the visible month
+  const monthKey = `${year}-${month}`
   useEffect(() => {
     let cancelled = false
     api
       .listPnl(iso(year, month, 1), iso(year, month, daysInMonth))
       .then((rows) => {
         if (cancelled) return
-        setLoadError('')
-        setEntries(Object.fromEntries(rows.map((r) => [r.date, r.pnl])))
+        setData({ key: monthKey, entries: Object.fromEntries(rows.map((r) => [r.date, r.pnl])), error: '' })
       })
       .catch((err) => {
         if (cancelled) return
-        setEntries({})
-        setLoadError(err.message)
+        setData({ key: monthKey, entries: {}, error: err.message })
       })
     return () => {
       cancelled = true
     }
-  }, [year, month, daysInMonth])
+  }, [year, month, daysInMonth, monthKey])
+
+  // still waiting for the month on screen (first load or after changing month)
+  const loading = data.key !== monthKey
+  const entries = useMemo(() => (loading ? {} : data.entries), [loading, data.entries])
+  const loadError = loading ? '' : data.error
 
   const stats = useMemo(() => {
     const vals = Object.values(entries)
@@ -105,7 +109,7 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
     setSaving(true)
     try {
       const rec = await api.savePnl(selected, n)
-      setEntries((prev) => ({ ...prev, [rec.date]: rec.pnl }))
+      setData((prev) => ({ ...prev, entries: { ...prev.entries, [rec.date]: rec.pnl } }))
       setSelected(null)
     } catch (err) {
       setFormError(err.message)
@@ -154,7 +158,7 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
           </button>
         </div>
 
-        <section className="stats">
+        <section className={`stats ${loading ? 'is-loading' : ''}`} aria-busy={loading}>
           <div className={`stat stat--main ${hasEntries ? tone(stats.total) : ''}`}>
             <span className="stat__label">Month P&amp;L</span>
             <span className="stat__value">{hasEntries ? signed(stats.total) : '—'}</span>
@@ -184,7 +188,12 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
           </p>
         )}
 
-        <div className="cal__grid">
+        <div className={`cal__grid ${loading ? 'is-loading' : ''}`} aria-busy={loading}>
+          {loading && (
+            <div className="cal__loader" role="status" aria-label="Loading">
+              <span className="spinner spinner--lg" />
+            </div>
+          )}
           {WEEKDAYS.map((w) => (
             <div key={w} className="cal__weekday">
               {w}
@@ -272,7 +281,13 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
                 Cancel
               </button>
               <button type="submit" className="login__button modal__save" disabled={saving}>
-                Save
+                {saving ? (
+                  <>
+                    <span className="spinner" /> Saving…
+                  </>
+                ) : (
+                  'Save'
+                )}
               </button>
             </div>
           </form>

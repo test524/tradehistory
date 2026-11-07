@@ -74,7 +74,15 @@ export default function AuthForm({ onAuthed }) {
         </p>
       )}
       <button type="submit" className="login__button" disabled={busy}>
-        {isRegister ? 'Register' : 'Submit'}
+        {busy ? (
+          <>
+            <span className="spinner" /> Please wait…
+          </>
+        ) : isRegister ? (
+          'Register'
+        ) : (
+          'Submit'
+        )}
       </button>
       <p className="login__hint">
         {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}

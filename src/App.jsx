@@ -21,7 +21,13 @@ function App() {
       .finally(() => setChecking(false))
   }, [])
 
-  if (checking) return null
+  if (checking) {
+    return (
+      <div className="page-loader" role="status" aria-label="Loading">
+        <span className="spinner spinner--lg" />
+      </div>
+    )
+  }
 
   if (user) {
     return (
