@@ -55,8 +55,8 @@ export default function ImportModal({ onClose, onImported }) {
       <div className="modal__box modal__box--wide" onClick={(e) => e.stopPropagation()}>
         <h3 className="modal__title">Import P&amp;L from Zerodha</h3>
         <p className="import__help">
-          In Zerodha Console go to <strong>Reports → P&amp;L</strong> and download the report (.xlsx). Choose it here.
-          Rows are added up per day.
+          Choose a Zerodha <strong>P&amp;L report</strong> or a <strong>trade list / tradebook</strong> (.csv or .xlsx).
+          Profit is added up per day. For trade lists, buys and sells are matched to work out the profit.
         </p>
 
         <input
@@ -89,10 +89,19 @@ export default function ImportModal({ onClose, onImported }) {
                 ({stats.wins} green, {stats.days - stats.wins} red)
               </span>
             </div>
-            <div className="import__muted">
-              Read “{parsed.dateHeader}” and “{parsed.pnlHeader}” from {parsed.sheet}
-              {parsed.skipped ? ` · ${parsed.skipped} rows skipped` : ''}
-            </div>
+            {parsed.mode === 'trades' ? (
+              <div className="import__muted">
+                Profit worked out by matching buys and sells (first in, first out) and counted on the day each
+                position was closed. Brokerage and taxes are not included.
+                {parsed.openPositions ? ` ${parsed.openPositions} position(s) still open were left out.` : ''}
+                {parsed.skipped ? ` ${parsed.skipped} unfilled rows ignored.` : ''}
+              </div>
+            ) : (
+              <div className="import__muted">
+                Read “{parsed.dateHeader}” and “{parsed.pnlHeader}” from {parsed.sheet}
+                {parsed.skipped ? ` · ${parsed.skipped} rows skipped` : ''}
+              </div>
+            )}
           </div>
         )}
 

@@ -41,7 +41,7 @@ export function parseAmount(v) {
   return Number(s)
 }
 
-const norm = (c) => (typeof c === 'string' ? c.toLowerCase().replace(/\s+/g, ' ').trim() : '')
+const norm = (c) => (typeof c === 'string' ? c.toLowerCase().replace(/[_\s]+/g, ' ').trim() : '')
 
 // first column whose header matches the earliest pattern in the priority list
 function pickColumn(headers, patterns, exclude) {
@@ -95,17 +95,104 @@ function readSheet(data) {
   return null
 }
 
+/* ---------- trade lists (tradebook / historical trades) ---------- */
+
+const TL_DATE = [/^date$/, /trade date/, /date/]
+const TL_SYMBOL = [/^symbol$/, /trading ?symbol|instrument|scrip/, /^name$/]
+const TL_SIDE = [/^buy ?\/ ?sell$/, /^side$/, /trade type|transaction type|buy ?\/? ?sell/, /^type$/]
+const TL_PRICE = [/^trade price$/, /^price$/, /avg.*price|average price/, /price/]
+const TL_PRICE_EXCLUDE = /trigger|strike|underlying|stop|target/
+const TL_QTY = [/^qty$/, /^quantity$/, /qty|quantity/]
+const TL_TIME = [/exchange time/, /execution time/, /^time$/, /time/]
+const TL_TIME_EXCLUDE = /trigger|report/
+
+const timeKey = (v) => (v instanceof Date ? v.toISOString() : v == null ? '' : String(v))
+
+function readTradeList(data) {
+  for (let r = 0; r < Math.min(data.length, 100); r++) {
+    const h = (data[r] || []).map(norm)
+    const c = {
+      date: pickColumn(h, TL_DATE),
+      symbol: pickColumn(h, TL_SYMBOL),
+      side: pickColumn(h, TL_SIDE),
+      price: pickColumn(h, TL_PRICE, TL_PRICE_EXCLUDE),
+      qty: pickColumn(h, TL_QTY),
+      time: pickColumn(h, TL_TIME, TL_TIME_EXCLUDE),
+    }
+    if ([c.date, c.symbol, c.side, c.price, c.qty].some((i) => i === -1)) continue
+
+    const trades = []
+    let ignored = 0
+    data.slice(r + 1).forEach((row, i) => {
+      if (!row || row.every((x) => x === null || x === undefined || x === '')) return
+      const date = parseDate(row[c.date])
+      const sideRaw = String(row[c.side] ?? '').trim().toLowerCase()
+      const side = /^b(uy)?$/.test(sideRaw) ? 1 : /^s(ell)?$/.test(sideRaw) ? -1 : 0
+      const price = parseAmount(row[c.price])
+      const qty = parseAmount(row[c.qty])
+      const symbol = String(row[c.symbol] ?? '').trim()
+      // unfilled / cancelled orders come through as empty, NaN or zero rows
+      if (!date || !side || !symbol || price === null || qty === null || qty <= 0 || price <= 0) {
+        ignored++
+        return
+      }
+      trades.push({ date, side, price, qty, symbol, order: `${c.time === -1 ? date : timeKey(row[c.time]) || date}|${String(i).padStart(7, '0')}` })
+    })
+    if (!trades.length) continue
+
+    // match buys with sells first-in-first-out per symbol; profit is booked on the day a position is closed
+    trades.sort((x, y) => (x.order < y.order ? -1 : x.order > y.order ? 1 : 0))
+    const books = new Map() // symbol -> open lots [{ side, qty, price }]
+    const byDate = new Map()
+    for (const t of trades) {
+      const lots = books.get(t.symbol) ?? []
+      books.set(t.symbol, lots)
+      let left = t.qty
+      while (left > 1e-9 && lots.length && lots[0].side === -t.side) {
+        const lot = lots[0]
+        const m = Math.min(left, lot.qty)
+        const gain = lot.side === 1 ? t.price - lot.price : lot.price - t.price
+        byDate.set(t.date, (byDate.get(t.date) ?? 0) + gain * m)
+        lot.qty -= m
+        left -= m
+        if (lot.qty <= 1e-9) lots.shift()
+      }
+      if (left > 1e-9) lots.push({ side: t.side, qty: left, price: t.price })
+    }
+    const openSymbols = [...books].filter(([, lots]) => lots.length).map(([sym]) => sym)
+    if (!byDate.size) continue
+    return {
+      mode: 'trades',
+      headerRow: r + 1,
+      dateHeader: String(data[r][c.date]).trim(),
+      pnlHeader: 'calculated from buy/sell prices',
+      skipped: ignored,
+      openPositions: openSymbols.length,
+      entries: [...byDate]
+        .map(([date, pnl]) => ({ date, pnl: Math.round(pnl * 100) / 100 }))
+        .sort((x, y) => x.date.localeCompare(y.date)),
+    }
+  }
+  return null
+}
+
 // sheets: [{ name, data: any[][] }]
 export function extractDailyPnl(sheets) {
   let best = null
   for (const sheet of sheets) {
     const found = readSheet(sheet.data)
-    if (found && (!best || found.entries.length > best.entries.length)) best = { ...found, sheet: sheet.name }
+    if (found && (!best || found.entries.length > best.entries.length)) best = { ...found, mode: 'pnl', sheet: sheet.name }
+  }
+  if (!best) {
+    for (const sheet of sheets) {
+      const found = readTradeList(sheet.data)
+      if (found && (!best || found.entries.length > best.entries.length)) best = { ...found, sheet: sheet.name }
+    }
   }
   if (!best) {
     throw new Error(
-      'Could not find a date column and a profit/P&L column in this file. ' +
-        'Use a file with columns like "Date" and "P&L" (one row per trade or per day).',
+      'Could not find the columns needed. Use a file with a date and a profit/P&L column, ' +
+        'or a trade list with date, symbol, buy/sell, price and quantity.',
     )
   }
   return best
