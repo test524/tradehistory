@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as api from './api'
 import ImportModal from './ImportModal'
+import Report from './Report'
 import './Dashboard.css'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -26,6 +27,8 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
   const [saving, setSaving] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [tab, setTab] = useState('calendar') // 'calendar' | 'report'
+  const [all, setAll] = useState({ rows: [], loading: false, error: '' })
   const [toast, setToast] = useState('')
   const [reloadTick, setReloadTick] = useState(0)
   const fabRef = useRef(null)
@@ -67,6 +70,20 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
       cancelled = true
     }
   }, [year, month, daysInMonth, monthKey, reloadTick])
+
+  // all-time data for the report tab (refreshed every time the tab opens or data is imported)
+  useEffect(() => {
+    if (tab !== 'report') return
+    let cancelled = false
+    setAll((a) => ({ ...a, loading: true, error: '' }))
+    api
+      .listAllPnl()
+      .then((rows) => !cancelled && setAll({ rows, loading: false, error: '' }))
+      .catch((err) => !cancelled && setAll({ rows: [], loading: false, error: err.message }))
+    return () => {
+      cancelled = true
+    }
+  }, [tab, reloadTick])
 
   // still waiting for the month on screen (first load or after changing month)
   const loading = data.key !== monthKey
@@ -152,6 +169,38 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
   return (
     <div className="dash">
       <main className="dash__main">
+        <div className="tabs" role="tablist" aria-label="View">
+          {[
+            ['calendar', 'Calendar'],
+            ['report', 'Report'],
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              className={`tabs__btn ${tab === id ? 'is-active' : ''}`}
+              onClick={() => setTab(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'report' ? (
+          all.loading ? (
+            <div className="report__loading" role="status" aria-label="Loading">
+              <span className="spinner spinner--lg" />
+            </div>
+          ) : all.error ? (
+            <p className="dash__error" role="alert">
+              {all.error}
+            </p>
+          ) : (
+            <Report rows={all.rows} />
+          )
+        ) : (
+          <>
         <div className="cal__bar">
           <button type="button" className="cal__nav" onClick={() => shiftMonth(-1)} aria-label="Previous month">
             ‹
@@ -210,6 +259,8 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
           <i className="dot dot--win" /> Profit <i className="dot dot--loss" /> Loss / break-even
           <span>Click a day to add or edit its P&amp;L</span>
         </p>
+          </>
+        )}
       </main>
 
       <div className="fab" ref={fabRef}>
